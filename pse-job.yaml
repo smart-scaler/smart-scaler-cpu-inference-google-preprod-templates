@@ -72,6 +72,8 @@ spec:
                   optional: true
             - name: STORAGE_PROVIDER
               value: "GCP"
+            - name: USE_OBJECT_STORAGE
+              value: "true"
             volumeMounts:
             - name: data
               mountPath: /data
