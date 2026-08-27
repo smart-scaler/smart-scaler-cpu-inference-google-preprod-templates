@@ -1,3 +1,17 @@
+######################################################################
+# Project: smart-scaler-cpu-inference-google-preprod-templates
+# File: rs-job.yaml  (GCP preprod variant)
+#
+# Based on smart-scaler-cpu-inference-oracle-prod-templates/rs-job.yaml
+# with GCP-specific overrides:
+#   - REDIS_HOST: in-cluster GCP Redis (same as OCI prod)
+#   - REDIS_MODE: GCP (mTLS with same certs as OCI)
+#   - STORAGE_PROVIDER: GCP (GCSStorageClient via ADC/Workload Identity)
+#   - No nodeSelector/rightsizing-pool (no dedicated node pool on GCP preprod)
+#
+# Avesha LLC
+# Copyright (c) Avesha LLC. 2024-2025
+######################################################################
 apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -11,6 +25,8 @@ spec:
   jobTemplate:
     spec:
       backoffLimit: 1
+      activeDeadlineSeconds: 3600
+      ttlSecondsAfterFinished: 1800
       template:
         metadata:
           labels:
@@ -35,7 +51,7 @@ spec:
               command: ["/bin/sh", "-c"]
               args:
                 [
-                  "python right_sizing/right_size.py -c /data/config/rs-config-cm.json --log-level DEBUG"
+                  "python right_sizing/right_size.py -c /data/config/rs-config-cm.json --log-level DEBUG",
                 ]
               resources:
                 requests:
@@ -59,11 +75,11 @@ spec:
               volumeMounts:
                 - name: data
                   mountPath: /data
-                - name: redis-certificates-tls-secrets
-                  mountPath: /etc/ssl/certs/redis/
                 - name: config-volume
                   mountPath: /data/config/rs-config-cm.json
                   subPath: rs-config-cm.json
+                - name: redis-certificates-tls-secrets
+                  mountPath: /etc/ssl/certs/redis/
           tolerations:
             - key: non-app-pods-no-schedule
               value: 'true'

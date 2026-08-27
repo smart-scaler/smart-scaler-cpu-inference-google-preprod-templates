@@ -1,3 +1,17 @@
+######################################################################
+# Project: smart-scaler-cpu-inference-google-preprod-templates
+# File: pse-job.yaml  (GCP preprod variant)
+#
+# Based on smart-scaler-cpu-inference-oracle-prod-templates/pse-job.yaml
+# with GCP-specific overrides:
+#   - REDIS_HOST: in-cluster GCP Redis (same as OCI prod)
+#   - REDIS_MODE: GCP (mTLS with same certs as OCI)
+#   - STORAGE_PROVIDER: GCP (GCSStorageClient via ADC/Workload Identity)
+#   - No nodeSelector/rightsizing-pool (no dedicated node pool on GCP preprod)
+#
+# Avesha LLC
+# Copyright (c) Avesha LLC. 2024-2025
+######################################################################
 apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -10,6 +24,8 @@ spec:
   failedJobsHistoryLimit: 1
   jobTemplate:
     spec:
+      activeDeadlineSeconds: 3600
+      ttlSecondsAfterFinished: 1800
       backoffLimit: 1
       template:
         metadata:
@@ -20,12 +36,12 @@ spec:
           volumes:
           - name: data
             emptyDir: {}
-          - name: redis-certificates-tls-secrets
-            secret:
-              secretName: redis-certificates-tls-secrets
           - name: config-volume
             configMap:
               name: pse-config-map
+          - name: redis-certificates-tls-secrets
+            secret:
+              secretName: redis-certificates-tls-secrets
           imagePullSecrets:
           - name: avesha-docker
           containers:
@@ -35,7 +51,7 @@ spec:
             command: ["/bin/sh", "-c"]
             args:
               [
-                "python utils/pse.py -c /data/config/pse-config-cm.json --log-level DEBUG --generic-model-config --calculate-ratio --default-rps-pattern"
+                "python utils/pse.py -c /data/config/pse-config-cm.json --log-level DEBUG --generic-model-config --calculate-ratio --default-rps-pattern",
               ]
             resources:
               requests:
@@ -59,14 +75,12 @@ spec:
             volumeMounts:
             - name: data
               mountPath: /data
-            - name: redis-certificates-tls-secrets
-              mountPath: /etc/ssl/certs/redis/
             - name: config-volume
               mountPath: /data/config/pse-config-cm.json
               subPath: pse-config-cm.json
-            ports:
-            - containerPort: 6379
+            - name: redis-certificates-tls-secrets
+              mountPath: /etc/ssl/certs/redis/
           tolerations:
-          - key: non-app-pods-no-schedule
-            value: 'true'
-            effect: NoSchedule
+          - key: "non-app-pods-no-schedule"
+            value: "true"
+            effect: "NoSchedule"

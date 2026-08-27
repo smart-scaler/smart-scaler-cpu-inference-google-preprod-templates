@@ -1,9 +1,15 @@
 ######################################################################
-# Project: rlautoscaler
-# File: rlautoscaler/k8s/inference.yaml  (GCP variant)
+# Project: smart-scaler-cpu-inference-google-preprod-templates
+# File: inference.yaml  (GCP preprod variant)
+#
+# Based on smart-scaler-cpu-inference-oracle-prod-templates/inference.yaml
+# with GCP-specific overrides:
+#   - REDIS_HOST: in-cluster GCP Redis (same as OCI prod)
+#   - REDIS_MODE: GCP (mTLS with same certs as OCI)
+#   - STORAGE_PROVIDER: GCP (GCSStorageClient via ADC/Workload Identity)
 #
 # Avesha LLC
-# Copyright (c) Avesha LLC. 2024
+# Copyright (c) Avesha LLC. 2024-2025
 ######################################################################
 apiVersion: apps/v1
 kind: Deployment
@@ -32,18 +38,22 @@ spec:
       - name: redis-certificates-tls-secrets
         secret:
           secretName: redis-certificates-tls-secrets
+      - name: override-config-volume
+        configMap:
+          name: config-override
+          optional: true
       - name: appconfig-config-volume
         configMap:
           name: appconfig
       containers:
       - name: inference
-        image: harbor.saas1.smart-scaler.io/avesha/aveshadev/smart-scaler-py:1.7.1-RELEASE-42bfacce
+        image: harbor.saas1.smart-scaler.io/smartscaler/smart-scaler-py:v1.9.1
         imagePullPolicy: IfNotPresent
         command: ["/bin/sh", "-c"]
-        args: ["wandb disabled && python policy/inference.py --load-checkpoint-from-training-key '/generic-model-sudhir-test/boutique-thescore-data-pattern/v1/pse-ray2.7/train1, checkpoint_000052' --mode mesh --no-cpu-switch --k8s-event-flag"]
+        args: ["wandb disabled && python policy/inference.py --load-checkpoint-from-training-key '/generic-model/boutique-thescore-data-pattern/v1/pse-ray2.7, checkpoint_000052' --mode mesh --no-cpu-switch --k8s-event-flag"]
         resources:
           requests:
-            memory: 1.5Gi
+            memory: 1Gi
             cpu: 100m
         env:
         - name: REDIS_HOST
@@ -63,11 +73,14 @@ spec:
         volumeMounts:
         - name: data
           mountPath: /data
-        - name: redis-certificates-tls-secrets
-          mountPath: /etc/ssl/certs/redis/
         - name: appconfig-config-volume
           mountPath: /data/config/appconfig.json
           subPath: appconfig.json
+        - name: override-config-volume
+          mountPath: /data/config/override_config.json
+          subPath: override_config.json
+        - name: redis-certificates-tls-secrets
+          mountPath: /etc/ssl/certs/redis/
         ports:
           - containerPort: 9900
           - containerPort: 8265
