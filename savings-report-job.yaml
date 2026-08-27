@@ -1,0 +1,78 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: savings-report-generator
+  namespace: tenant-placeholder
+  labels:
+    service: savings-report-generator
+    tenant-id: tenant-placeholder
+    deployment-id: deployment-placeholder
+spec:
+  schedule: "0 2 1 * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 7200
+      template:
+        metadata:
+          labels:
+            service: savings-report-generator
+            tenant-id: tenant-placeholder
+            deployment-id: deployment-placeholder
+        spec:
+          restartPolicy: OnFailure
+          volumes:
+          - name: data
+            emptyDir: {}
+          - name: redis-certificates-tls-secrets
+            secret:
+              secretName: redis-certificates-tls-secrets
+          imagePullSecrets:
+          - name: avesha-docker
+          containers:
+          - name: savings-report-generator
+            image: aveshadev/smart-scaler-sr:1.4.1-SNAPSHOT-51d31380
+            imagePullPolicy: Always
+            command: ["/bin/sh", "-c"]
+            args:
+              [
+                "python savings_report/main.py --tenant-id tenant-placeholder --price-vcpu 0.07 && echo 'Savings report generated successfully at $(date)'"
+              ]
+            resources:
+              requests:
+                memory: 1Gi
+                cpu: 300m
+              limits:
+                memory: 2Gi
+                cpu: 1000m
+            env:
+            - name: REDIS_HOST
+              value: "smartscaler-saas-redis-master.saas-apis.svc.cluster.local"
+            - name: REDIS_PORT
+              value: "6379"
+            - name: REDIS_MODE
+              value: "GCP"
+            - name: REDIS_AUTH_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: redis-auth-secrets
+                  key: redis-auth-password
+                  optional: true
+            - name: STORAGE_PROVIDER
+              value: "GCP"
+            - name: LOG_LEVEL
+              value: "DEBUG"
+            volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: redis-certificates-tls-secrets
+              mountPath: /etc/ssl/certs/redis/
+          tolerations:
+          - key: non-app-pods-no-schedule
+            value: 'true'
+            effect: NoSchedule
+          nodeSelector:
+            kubernetes.io/os: linux

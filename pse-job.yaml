@@ -1,0 +1,72 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  labels:
+    service: pod-spec-estimator
+spec:
+  schedule: 0 0 * * *
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      template:
+        metadata:
+          labels:
+            service: pod-spec-estimator
+        spec:
+          restartPolicy: OnFailure
+          volumes:
+          - name: data
+            emptyDir: {}
+          - name: redis-certificates-tls-secrets
+            secret:
+              secretName: redis-certificates-tls-secrets
+          - name: config-volume
+            configMap:
+              name: pse-config-map
+          imagePullSecrets:
+          - name: avesha-docker
+          containers:
+          - name: autoscaler
+            image: harbor.saas1.smart-scaler.io/smartscaler/smart-scaler-pse:v1.6.0
+            imagePullPolicy: Always
+            command: ["/bin/sh", "-c"]
+            args:
+              [
+                "python utils/pse.py -c /data/config/pse-config-cm.json --log-level DEBUG --generic-model-config --calculate-ratio --default-rps-pattern"
+              ]
+            resources:
+              requests:
+                memory: 1Gi
+                cpu: 300m
+            env:
+            - name: REDIS_HOST
+              value: "smartscaler-saas-redis-master.saas-apis.svc.cluster.local"
+            - name: REDIS_PORT
+              value: "6379"
+            - name: REDIS_MODE
+              value: "GCP"
+            - name: REDIS_AUTH_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: redis-auth-secrets
+                  key: redis-auth-password
+                  optional: true
+            - name: STORAGE_PROVIDER
+              value: "GCP"
+            volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: redis-certificates-tls-secrets
+              mountPath: /etc/ssl/certs/redis/
+            - name: config-volume
+              mountPath: /data/config/pse-config-cm.json
+              subPath: pse-config-cm.json
+            ports:
+            - containerPort: 6379
+          tolerations:
+          - key: non-app-pods-no-schedule
+            value: 'true'
+            effect: NoSchedule

@@ -1,0 +1,81 @@
+######################################################################
+# Project: rlautoscaler
+# File: rlautoscaler/k8s/inference.yaml  (GCP variant)
+#
+# Avesha LLC
+# Copyright (c) Avesha LLC. 2024
+######################################################################
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inference
+  labels:
+    service: inference-tenant-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      service: inference-tenant-app
+  template:
+    metadata:
+      labels:
+        service: inference-tenant-app
+      annotations:
+        configmap.reloadedAt: '{{now}}'
+    spec:
+      automountServiceAccountToken: true
+      serviceAccountName: smart-scaler-inference-deployer-sa
+      restartPolicy: Always
+      volumes:
+      - name: data
+        emptyDir: {}
+      - name: redis-certificates-tls-secrets
+        secret:
+          secretName: redis-certificates-tls-secrets
+      - name: appconfig-config-volume
+        configMap:
+          name: appconfig
+      containers:
+      - name: inference
+        image: harbor.saas1.smart-scaler.io/avesha/aveshadev/smart-scaler-py:1.7.1-RELEASE-42bfacce
+        imagePullPolicy: IfNotPresent
+        command: ["/bin/sh", "-c"]
+        args: ["wandb disabled && python policy/inference.py --load-checkpoint-from-training-key '/generic-model-sudhir-test/boutique-thescore-data-pattern/v1/pse-ray2.7/train1, checkpoint_000052' --mode mesh --no-cpu-switch --k8s-event-flag"]
+        resources:
+          requests:
+            memory: 1.5Gi
+            cpu: 100m
+        env:
+        - name: REDIS_HOST
+          value: "smartscaler-saas-redis-master.saas-apis.svc.cluster.local"
+        - name: REDIS_PORT
+          value: "6379"
+        - name: REDIS_MODE
+          value: "GCP"
+        - name: REDIS_AUTH_KEY
+          valueFrom:
+            secretKeyRef:
+              name: redis-auth-secrets
+              key: redis-auth-password
+              optional: true
+        - name: STORAGE_PROVIDER
+          value: "GCP"
+        volumeMounts:
+        - name: data
+          mountPath: /data
+        - name: redis-certificates-tls-secrets
+          mountPath: /etc/ssl/certs/redis/
+        - name: appconfig-config-volume
+          mountPath: /data/config/appconfig.json
+          subPath: appconfig.json
+        ports:
+          - containerPort: 9900
+          - containerPort: 8265
+          - containerPort: 4321
+          - containerPort: 6379
+      imagePullSecrets:
+      - name: avesha-docker
+      tolerations:
+        - key: "non-app-pods-no-schedule"
+          value: "true"
+          effect: "NoSchedule"

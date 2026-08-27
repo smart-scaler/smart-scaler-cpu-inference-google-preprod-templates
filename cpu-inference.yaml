@@ -1,0 +1,60 @@
+######################################################################
+# Project: rlautoscaler
+# File: cpuinfjob.yaml  (GCP variant)
+#
+# Avesha LLC
+# Copyright (c) Avesha LLC. 2024
+######################################################################
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cpu-inference-1
+  labels:
+    service: cpu-inference
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      service: cpu-inference
+  template:
+    metadata:
+      labels:
+        service: cpu-inference
+    spec:
+      restartPolicy: Always
+      volumes:
+      - name: data
+        emptyDir: {}
+      - name: appconfig-config-volume
+        configMap:
+          name: appconfig
+      containers:
+      - name: cpu-inference
+        image: aveshadev/smart-scaler-cpu-inf:v0.7.1-RELEASE-8c32aae4
+        imagePullPolicy: Always
+        command: ["/bin/sh", "-c"]
+        args: ["python3 inference/cpu_inference.py"]
+        resources:
+          requests:
+            memory: 1Gi
+            cpu: 1
+        env:
+        - name: STORAGE_PROVIDER
+          value: "GCP"
+        ports:
+          - containerPort: 9900
+          - containerPort: 8265
+          - containerPort: 4321
+          - containerPort: 6379
+        volumeMounts:
+        - name: data
+          mountPath: /data
+        - name: appconfig-config-volume
+          mountPath: /data/config/appconfig.json
+          subPath: appconfig.json
+      imagePullSecrets:
+      - name: avesha-docker
+      tolerations:
+        - key: "non-app-pods-no-schedule"
+          value: "true"
+          effect: "NoSchedule"
