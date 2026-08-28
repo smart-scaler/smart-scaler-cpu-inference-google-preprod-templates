@@ -46,7 +46,7 @@ spec:
           - name: avesha-docker
           containers:
           - name: autoscaler
-            image: harbor.saas1.smart-scaler.io/avesha/aveshadev/smart-scaler-pse:1.10.0-SNAPSHOT-b67b4439
+            image: harbor.saas1.smart-scaler.io/avesha/aveshadev/smart-scaler-pse:1.10.0-SNAPSHOT-788b1e09
             imagePullPolicy: Always
             command: ["/bin/sh", "-c"]
             args:
